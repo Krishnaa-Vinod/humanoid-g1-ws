@@ -1,0 +1,12 @@
+isaaclab_unitree_g1
+.git
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+.vscode
+.idea
+.pytest_cache
+build
+install
+log

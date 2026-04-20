@@ -1,0 +1,14 @@
+# Python
+**/__pycache__/
+**/*.pyc
+
+# VS Code workspace settings
+.vscode/
+
+# IsaacLab nested git backup created during repo merge
+isaaclab_unitree_g1/.git_nested_backup_20260419/
+
+# ROS 2 / colcon generated artifacts
+ros2_ws/build/
+ros2_ws/install/
+ros2_ws/log/
