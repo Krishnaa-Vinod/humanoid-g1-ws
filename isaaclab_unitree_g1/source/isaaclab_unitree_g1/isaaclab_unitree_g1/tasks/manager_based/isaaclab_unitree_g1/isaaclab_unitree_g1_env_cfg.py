@@ -23,7 +23,7 @@ from . import mdp
 # Pre-defined configs
 ##
 
-from isaaclab_assets.robots.cartpole import CARTPOLE_CFG  # isort:skip
+from isaaclab_unitree_g1.g1_cfg import G1_CFG
 
 
 ##
@@ -33,7 +33,7 @@ from isaaclab_assets.robots.cartpole import CARTPOLE_CFG  # isort:skip
 
 @configclass
 class IsaaclabUnitreeG1SceneCfg(InteractiveSceneCfg):
-    """Configuration for a cart-pole scene."""
+    """Configuration for a G1 scene."""
 
     # ground plane
     ground = AssetBaseCfg(
@@ -42,7 +42,7 @@ class IsaaclabUnitreeG1SceneCfg(InteractiveSceneCfg):
     )
 
     # robot
-    robot: ArticulationCfg = CARTPOLE_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
+    robot: ArticulationCfg = G1_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
 
     # lights
     dome_light = AssetBaseCfg(
@@ -60,7 +60,7 @@ class IsaaclabUnitreeG1SceneCfg(InteractiveSceneCfg):
 class ActionsCfg:
     """Action specifications for the MDP."""
 
-    joint_effort = mdp.JointEffortActionCfg(asset_name="robot", joint_names=["slider_to_cart"], scale=100.0)
+    joint_pos = mdp.JointPositionActionCfg(asset_name="robot", joint_names=[".*"], scale=1.0)
 
 
 @configclass
@@ -74,6 +74,9 @@ class ObservationsCfg:
         # observation terms (order preserved)
         joint_pos_rel = ObsTerm(func=mdp.joint_pos_rel)
         joint_vel_rel = ObsTerm(func=mdp.joint_vel_rel)
+        base_lin_vel = ObsTerm(func=mdp.base_lin_vel)
+        base_ang_vel = ObsTerm(func=mdp.base_ang_vel)
+        projected_gravity = ObsTerm(func=mdp.projected_gravity)
 
         def __post_init__(self) -> None:
             self.enable_corruption = False
@@ -88,23 +91,21 @@ class EventCfg:
     """Configuration for events."""
 
     # reset
-    reset_cart_position = EventTerm(
-        func=mdp.reset_joints_by_offset,
+    reset_base = EventTerm(
+        func=mdp.reset_root_custom,
         mode="reset",
         params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=["slider_to_cart"]),
-            "position_range": (-1.0, 1.0),
-            "velocity_range": (-0.5, 0.5),
+            "pos_range": (0.0, 0.0, 0.74, 0.0, 0.0, 0.74),
+            "rot_range": (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0),
         },
     )
 
-    reset_pole_position = EventTerm(
+    reset_robot_joints = EventTerm(
         func=mdp.reset_joints_by_offset,
         mode="reset",
         params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=["cart_to_pole"]),
-            "position_range": (-0.25 * math.pi, 0.25 * math.pi),
-            "velocity_range": (-0.25 * math.pi, 0.25 * math.pi),
+            "position_range": (-0.1, 0.1),
+            "velocity_range": (-0.0, 0.0),
         },
     )
 
@@ -117,23 +118,16 @@ class RewardsCfg:
     alive = RewTerm(func=mdp.is_alive, weight=1.0)
     # (2) Failure penalty
     terminating = RewTerm(func=mdp.is_terminated, weight=-2.0)
-    # (3) Primary task: keep pole upright
-    pole_pos = RewTerm(
-        func=mdp.joint_pos_target_l2,
-        weight=-1.0,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["cart_to_pole"]), "target": 0.0},
+    # (3) Target velocity tracking
+    track_lin_vel_xy_exp = RewTerm(
+        func=mdp.track_lin_vel_xy_exp,
+        weight=1.0,
+        params={"command_name": "base_velocity", "std": 0.5},
     )
-    # (4) Shaping tasks: lower cart velocity
-    cart_vel = RewTerm(
-        func=mdp.joint_vel_l1,
-        weight=-0.01,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["slider_to_cart"])},
-    )
-    # (5) Shaping tasks: lower pole angular velocity
-    pole_vel = RewTerm(
-        func=mdp.joint_vel_l1,
-        weight=-0.005,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["cart_to_pole"])},
+    track_ang_vel_z_exp = RewTerm(
+        func=mdp.track_ang_vel_z_exp,
+        weight=0.5,
+        params={"command_name": "base_velocity", "std": 0.5},
     )
 
 
