@@ -5,13 +5,13 @@
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING
 
 import torch
 
 from isaaclab.assets import Articulation
 from isaaclab.managers import SceneEntityCfg
-from isaaclab.utils.math import wrap_to_pi
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
@@ -25,18 +25,14 @@ def _quat_rotate(q: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
     return v + 2.0 * (q[:, :1] * uv + uuv)
 
 
-def upright(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg) -> torch.Tensor:
-    """Reward upright posture using the base up-axis alignment with world up."""
+def base_height_below(env: ManagerBasedRLEnv, min_height: float, asset_cfg: SceneEntityCfg) -> torch.Tensor:
+    """Terminate when the base height drops below the threshold."""
+    asset: Articulation = env.scene[asset_cfg.name]
+    return asset.data.root_pos_w[:, 2] < min_height
+
+
+def base_tilt_exceeded(env: ManagerBasedRLEnv, max_tilt: float, asset_cfg: SceneEntityCfg) -> torch.Tensor:
+    """Terminate when the base tilt exceeds the threshold in radians."""
     asset: Articulation = env.scene[asset_cfg.name]
     base_up = _quat_rotate(asset.data.root_quat_w, torch.tensor([0.0, 0.0, 1.0], device=asset.data.root_quat_w.device))
-    return base_up[:, 2]
-
-
-def joint_pos_target_l2(env: ManagerBasedRLEnv, target: float, asset_cfg: SceneEntityCfg) -> torch.Tensor:
-    """Penalize joint position deviation from a target value."""
-    # extract the used quantities (to enable type-hinting)
-    asset: Articulation = env.scene[asset_cfg.name]
-    # wrap the joint positions to (-pi, pi)
-    joint_pos = wrap_to_pi(asset.data.joint_pos[:, asset_cfg.joint_ids])
-    # compute the reward
-    return torch.sum(torch.square(joint_pos - target), dim=1)
+    return base_up[:, 2] < math.cos(max_tilt)
